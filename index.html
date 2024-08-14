@@ -14,27 +14,55 @@
 
 <script type="text/javascript">
 
-    const config = {
-        type: Phaser.AUTO,
-        width: 800,
-        height: 600,
-        physics: {
-          default: 'arcade',
-          arcade: {
-            gravity: {y: 300},
-            debug: false
-          }
-        },
-        scene: {
-            preload: preload,
-            create: create,
-            update: update
-        }
-    };
+  let score = 0;
 
-    const game = new Phaser.Game(config);
+  class GameOver extends Phaser.Scene {
+    constructor()
+    {
+      super({key: 'GameOver'})
+    }
 
-    function preload ()
+    preload()
+    {
+      this.load.image('sky', 'assets/sky.png')
+      this.load.bitmapFont(
+        "arcade",
+        "assets/fonts/arcade.png",
+        "assets/fonts/arcade.xml"
+      );
+    }
+
+    create()
+    {
+      this.add.image(400, 300, 'sky');
+      this.add.bitmapText(
+        400, 50, "arcade", score, 25 
+      );
+      this.add.bitmapText(
+        200, 150, "arcade", "GAME OVER", 60
+      );
+      this.add.bitmapText(
+        300, 250, "arcade", "Press SPACE to restart!", 15
+      );
+      score = 0;
+    }
+
+    update()
+    {
+      const cursors = this.input.keyboard.createCursorKeys();
+      if(cursors.space.isDown){
+        this.scene.start('Main');
+      }
+    }
+  }
+
+  class Main extends Phaser.Scene {
+    constructor()
+    {
+      super({key: 'Main'})
+    }
+
+    preload()
     {
       this.load.image('sky', 'assets/sky.png');
       this.load.image('ground', 'assets/platform.png');
@@ -43,32 +71,45 @@
       this.load.audio('jump', 'assets/sounds/jump.mp3');
       this.load.audio('blink', 'assets/sounds/coin.mp3');
       this.load.audio('dead', 'assets/sounds/dead.mp3');
+      this.load.audio('theme', 'assets/sounds/theme.mp3');
+      this.load.bitmapFont('arcade', 'assets/fonts/arcade.png', 'assets/fonts/arcade.xml');
       this.load.spritesheet('dude', 'assets/dude.png', {
         frameWidth: 32, frameHeight: 48
       });
+      this.load.bitmapFont(
+        "arcade",
+        "assets/fonts/arcade.png",
+        "assets/fonts/arcade.xml"
+      );
     }
 
-    function create ()
+    create()
     {
-      jumpSound = this.sound.add("jump");
-      blinkSound = this.sound.add("blink");
-      deadSound = this.sound.add("dead");
+      this.jumpSound = this.sound.add("jump");
+      this.blinkSound = this.sound.add("blink");
+      this.deadSound = this.sound.add("dead");
+      this.themeSound = this.sound.add("theme");
+
+      this.themeSound.play({
+        volume: 0.5,
+        loop: true
+      }); 
       // BACKGROUND
       this.add.image(400,300, 'sky');
 
       // PLATFORM
-      platforms = this.physics.add.staticGroup();
+      this.platforms = this.physics.add.staticGroup();
 
-      platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+      this.platforms.create(400, 568, 'ground').setScale(2).refreshBody();
 
-      platforms.create(600,400, 'ground');
-      platforms.create(50,250, 'ground');
-      platforms.create(750, 220, 'ground');
+      this.platforms.create(600,400, 'ground');
+      this.platforms.create(50,250, 'ground');
+      this.platforms.create(750, 220, 'ground');
 
       // PLAYER
-      player = this.physics.add.sprite(100,450, 'dude');
-      player.setBounce(0.2);
-      player.setCollideWorldBounds(true);
+      this.player = this.physics.add.sprite(100,450, 'dude');
+      this.player.setBounce(0.2);
+      this.player.setCollideWorldBounds(true);
 
       this.anims.create({
         key: 'left',
@@ -89,21 +130,20 @@
         frameRate: 10,
         repeat: -1
       });
-      player.body.setGravityY(30);
+      this.player.body.setGravityY(30);
       
       // SCORE
-      let score = 0;
       var scoreText;
-      scoreText = this.add.text(16,16, 'score: 0', {fontSize: '32px', fill: '#000'});
+      scoreText = this.add.bitmapText(16, 16, "arcade", "Score: " + score, 20);
       
       // STARS
-      stars = this.physics.add.group({
+      this.stars = this.physics.add.group({
         key: 'star',
         repeat: 11,
         setXY: {x: 12, y: 0, stepX: 70}
       });
 
-      stars.children.iterate(function (child) {
+      this.stars.children.iterate(function (child) {
         child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
       });
 
@@ -112,64 +152,80 @@
         star.disableBody(true, true);
         score += 10;
         scoreText.setText('Score: ' + score);
-        blinkSound.play();
+        this.blinkSound.play();
 
-        if(stars.countActive(true) === 0){
-          stars.children.iterate(function (child){
+        if(this.stars.countActive(true) === 0){
+          this.stars.children.iterate(function (child){
             child.enableBody(true, child.x, 0, true, true);
           });
 
           var x = (player.x < 400) ? Phaser.Math.Between(400, 800) : Phaser.Math.Between(0, 400);
-          var bomb = bombs.create(x, 16, 'bomb');
-          bomb.setBounce(1);
-          bomb.setCollideWorldBounds(true);
-          bomb.setVelocity(Phaser.Math.Between(-220, 200), 20);
+          this.bomb = this.bombs.create(x, 16, 'bomb');
+          this.bomb.setBounce(1);
+          this.bomb.setCollideWorldBounds(true);
+          this.bomb.setVelocity(Phaser.Math.Between(-220, 200), 20);
         }
       }
 
       // BOMBS
-      bombs = this.physics.add.group();
+      this.bombs = this.physics.add.group();
       function hitBomb(player, bomb){
         this.physics.pause();
-        deadSound.play();
+        bomb.setVisible(false);
+        this.deadSound.play();
         player.setTint(0xff0000);
         player.anims.play('turn');
-        gameOver = true;
+        this.themeSound.stop();
+        this.scene.start('GameOver');
       }
-
 
       // COLLIDER
-      this.physics.add.collider(player, platforms);
-      this.physics.add.collider(stars, platforms);
-      this.physics.add.overlap(player, stars, collectStar, null, this);
-      this.physics.add.collider(bombs, platforms);
-      this.physics.add.collider(player, bombs, hitBomb, null, this);
+      this.physics.add.collider(this.player, this.platforms);
+      this.physics.add.collider(this.stars, this.platforms);
+      this.physics.add.overlap(this.player, this.stars, collectStar, null, this);
+      this.physics.add.collider(this.bombs, this.platforms);
+      this.physics.add.collider(this.player, this.bombs, hitBomb, null, this);
     }
-    
-    function update ()
+
+    update()
     {
-      cursors = this.input.keyboard.createCursorKeys();
+      const cursors = this.input.keyboard.createCursorKeys();
 
       if(cursors.left.isDown){
-        player.setVelocityX(-300);
-        player.anims.play('left', true);    
+        this.player.setVelocityX(-300);
+        this.player.anims.play('left', true);    
       }
       else if(cursors.right.isDown){
-        player.setVelocityX(300);
-        player.anims.play('right', true);
+        this.player.setVelocityX(300);
+        this.player.anims.play('right', true);
       }
       else{
-        player.setVelocityX(0);
-        player.anims.play('turn');
+        this.player.setVelocityX(0);
+        this.player.anims.play('turn');
       }
 
-      if(cursors.up.isDown && player.body.touching.down){
-        player.setVelocityY(-350);
-        jumpSound.play();
+      if(cursors.up.isDown && this.player.body.touching.down){
+        this.player.setVelocityY(-350);
+        this.jumpSound.play();
       }
     }
+  }
 
+  const config = {
+      type: Phaser.AUTO,
+      width: 800,
+      height: 600,
+      physics: {
+        default: 'arcade',
+        arcade: {
+          gravity: {y: 300},
+          debug: false
+        }
+      },
+      scene: [Main, GameOver]
+  };
+
+  const game = new Phaser.Game(config);
 </script>
-
 </body>
 </html>
